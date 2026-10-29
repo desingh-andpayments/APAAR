@@ -1,0 +1,914 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>APAAR · Branch Network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link href="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet">
+<style>
+/* Tokens: copied from APAAR · Compliance so the two screens match */
+:root{
+  --bg:#E8EAF0; --frame:#F5F6F9; --card:#FFFFFF; --tile:#F4F5F8; --line:#ECEDF1; --ink:#15161A; --ink2:#6B6E76; --ink3:#A6A9B0; --bar:#EEEFF3;
+  --lime:#E2F08C; --lime-ink:#3B4600; --mint:#CFE6DA; --mint-ink:#1E4A3A; --lav:#E3E6F6; --lav-ink:#3A417A;
+  --green:#2F9B62; --red:#D2483D; --amber:#B9801E; --st-green:#9AD3A8; --st-amber:#EBC26E; --st-red:#E8968F; --red-soft:#FBE9E7; --green-soft:#E4F3EA; --amber-soft:#FBF1DD;
+  --shadow:0 1px 2px rgba(21,22,26,.04),0 14px 34px -14px rgba(21,22,26,.22);
+  --display:"Outfit","Inter",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light; box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0B0C0E; --frame:#121316; --card:#1A1B1F; --tile:#212227; --line:#2A2B31; --ink:#F2F3F5; --ink2:#A3A6AE; --ink3:#686B73; --bar:#26272D;
+  --mint:#203A31; --mint-ink:#BFE3D2; --lav:#25284A; --lav-ink:#C8CCF4; --red-soft:#331B18; --green-soft:#16301F; --amber-soft:#30260F;
+  --shadow:0 0 0 1px #30323B,0 16px 36px -14px rgba(0,0,0,.7); color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0B0C0E; --frame:#121316; --card:#1A1B1F; --tile:#212227; --line:#2A2B31; --ink:#F2F3F5; --ink2:#A3A6AE; --ink3:#686B73; --bar:#26272D;
+  --mint:#203A31; --mint-ink:#BFE3D2; --lav:#25284A; --lav-ink:#C8CCF4; --red-soft:#331B18; --green-soft:#16301F; --amber-soft:#30260F;
+  --shadow:0 0 0 1px #30323B,0 16px 36px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+html,body{height:100%;margin:0}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:20px;-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+button:disabled{cursor:default}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;border-radius:10px}
+svg{display:block}
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ic.s{width:16px;height:16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.disp{font-family:var(--display);font-variant-numeric:tabular-nums}
+.dim{color:var(--ink3)} .muted{color:var(--ink2)} .spacer{flex:1} .row{display:flex;align-items:center;gap:8px}
+.small{font-size:12px}
+
+/* Map fills the screen; everything else floats above it, like the CTU layout */
+#map{position:fixed;inset:0;background:var(--bg)}
+.ov{position:fixed;z-index:10}
+
+/* Icon rail */
+.rail{left:16px;top:16px;bottom:16px;width:64px;background:var(--card);border-radius:26px;box-shadow:var(--shadow);padding:12px 0;display:flex;flex-direction:column;align-items:center;gap:6px}
+.rb{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:var(--ink2)}
+.rb:hover{background:var(--tile);color:var(--ink)}
+.rb[aria-current="page"]{background:var(--ink);color:var(--card)}
+.rail hr{border:0;border-top:1px solid var(--line);width:36px;margin:auto 0 4px}
+
+/* Brand + left column of cards */
+.brandc{left:96px;top:16px;width:380px;height:56px;background:var(--card);border-radius:20px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;padding:0 14px}
+.mark{width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--card);display:grid;place-items:center;font:600 12px var(--display);flex:none}
+.brandc b{display:block;font:600 15px/18px var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brandc small{display:block;color:var(--ink2);font-size:11.5px;line-height:15px}
+.leftcol{left:96px;top:84px;width:380px;max-height:calc(100dvh - 84px - 120px);display:flex;flex-direction:column;gap:12px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding-bottom:36px;
+  -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 36px),transparent);transition:opacity .4s,transform .4s}
+.leftcol::-webkit-scrollbar{display:none}
+.leftcol.off{opacity:0;transform:translateX(-12px);pointer-events:none}
+
+.card{background:var(--card);border-radius:24px;box-shadow:var(--shadow);padding:16px 18px 18px;display:flex;flex-direction:column;gap:12px;flex:none}
+.ch{display:flex;align-items:center;gap:8px}
+.ch h2{margin:0;font:500 16px/1.2 var(--display);letter-spacing:-.005em}
+.ddot{width:8px;height:8px;border-radius:50%;background:var(--ink3);flex:none}
+.big{font:300 40px/1 var(--display);letter-spacing:-.02em}
+.big .u{font-size:15px;color:var(--ink2);margin-left:6px;letter-spacing:0}
+.mid{font:400 22px/1.1 var(--display);letter-spacing:-.01em}
+.segbar{display:flex;gap:3px;height:10px}
+.segbar i{border-radius:5px;min-width:4px;transition:flex-grow .9s cubic-bezier(.2,.8,.2,1)}
+.segkey{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--ink2)}
+.segkey span{display:flex;align-items:center;gap:6px}
+.segkey span::before{content:"";width:8px;height:8px;border-radius:3px;background:var(--c)}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.tile{background:var(--tile);border-radius:16px;padding:10px 12px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tile .tl{font-size:12px;color:var(--ink2);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile b{font:400 18px/1.25 var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile small{font-size:11.5px;color:var(--ink2);white-space:nowrap}
+.tile.red{background:var(--red-soft)} .tile.red .tl,.tile.red small{color:var(--red)}
+.tile.green{background:var(--green-soft)} .tile.green .tl,.tile.green small{color:var(--green)}
+.tile.lav{background:var(--lav);color:var(--lav-ink)} .tile.lav .tl,.tile.lav small{color:inherit;opacity:.8}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.tag.red{background:var(--red-soft);color:var(--red)} .tag.amber{background:var(--amber-soft);color:var(--amber)} .tag.green{background:var(--green-soft);color:var(--green)} .tag.grey{background:var(--tile);color:var(--ink2)}
+.ratio{display:flex;align-items:center;gap:12px}
+.ratio .big{font-weight:400}
+.ring{width:64px;height:64px;margin-left:auto;flex:none}
+.ring circle{fill:none;stroke-width:7}
+.ring .fg{stroke-linecap:round;transform:rotate(-90deg);transform-origin:50% 50%;transition:stroke-dasharray 1s cubic-bezier(.2,.8,.2,1)}
+
+/* Ranked list (districts or branches) */
+.rank{display:flex;flex-direction:column;gap:2px;margin:0 -6px}
+.rk{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:7px 8px;border-radius:12px;text-align:left;width:100%}
+.rk:hover,.rk.on{background:var(--tile)}
+.rk b{font-weight:500;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk .v{font:400 14px var(--display);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.rk small{font-size:11.5px;color:var(--ink2)}
+.rk .bar{grid-column:1/-1;height:4px;border-radius:2px;background:var(--bar);overflow:hidden}
+.rk .bar i{display:block;height:100%;border-radius:2px;background:var(--lav-ink)}
+.seg{display:flex;gap:14px}
+.seg button{height:24px;font-size:12.5px;font-weight:500;color:var(--ink3);box-shadow:inset 0 -2px 0 transparent}
+.seg button[aria-selected="true"]{color:var(--ink);box-shadow:inset 0 -2px 0 var(--ink)}
+
+/* Top bar */
+.topc{left:50%;top:16px;transform:translateX(-50%)}
+.pill{height:44px;padding:0 16px;border-radius:999px;background:var(--card);box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:500;white-space:nowrap}
+.pill.dark{background:var(--ink);color:var(--card)}
+.pill .cnt{font-size:11px;font-weight:600;background:var(--tile);color:var(--ink2);border-radius:999px;padding:1px 7px}
+.crumb{display:flex;align-items:center;gap:6px}
+.crumb .sep{color:var(--ink3)}
+.crumb .cur{color:var(--ink)} .crumb .up{color:var(--ink2)}
+.topr{right:16px;top:16px;display:flex;gap:10px;align-items:center}
+.cbtn{width:44px;height:44px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center;flex:none;font:600 13px var(--display)}
+.cbtn:hover{color:var(--ink2)}
+.av{width:30px;height:30px;border-radius:50%;background:var(--lav);color:var(--lav-ink);display:grid;place-items:center;font-weight:600;font-size:11px;flex:none}
+.rolep{padding:0 12px 0 7px}
+.rolep .rt{display:flex;flex-direction:column;line-height:15px;text-align:left}
+.rolep .rt small{font-size:11px;color:var(--ink2);font-weight:400}
+.picker{position:relative} .ov.picker{position:fixed}
+.menu{position:absolute;top:52px;background:var(--card);border-radius:18px;box-shadow:0 18px 40px rgba(21,22,26,.2);padding:6px;min-width:240px;z-index:30;display:flex;flex-direction:column;max-height:min(70vh,520px);overflow-y:auto}
+.menu[hidden]{display:none}
+.menu.r{right:0} .menu.c{left:50%;transform:translateX(-50%)}
+.menu button{padding:9px 12px;border-radius:12px;text-align:left;font-size:13px;display:flex;align-items:center;gap:10px}
+.menu button .mv{margin-left:auto;color:var(--ink2);font-size:12px}
+.menu button:hover,.menu button[aria-checked="true"]{background:var(--tile)}
+.menu button small{display:block;color:var(--ink2);font-size:11.5px}
+.menu .mh{font-size:11px;font-weight:600;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px}
+
+/* Right column: map controls */
+.ctl{right:16px;bottom:24px;display:flex;flex-direction:column;gap:10px}
+
+/* Bottom centre: data date + TARA */
+.botc{left:50%;bottom:24px;transform:translateX(-50%);display:flex;gap:10px;align-items:center}
+.asof{right:80px;bottom:30px;font-size:11.5px;color:var(--ink3);pointer-events:none;white-space:nowrap}
+/* Dashboard hidden: only the map, the top bar and the map controls stay */
+body.nodash .leftcol,body.nodash .legend,body.nodash .detail,body.nodash .botc,body.nodash .tara{opacity:0!important;pointer-events:none!important;transform:translateX(-12px)}
+body.nodash .detail{transform:translateX(24px)}
+.leftcol,.legend,.botc{transition:opacity .35s,transform .35s}
+#dashBtn[aria-pressed="true"]{background:var(--ink);color:var(--card)}
+.skip{background:var(--ink);color:var(--card)}
+
+/* Legend */
+.legend{left:96px;bottom:24px;background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:10px 14px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink2);width:380px}
+.legend .st{width:22px;height:10px;border-radius:3px;flex:none}
+.legend .sw{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.legend .sw i{width:10px;height:10px;border-radius:3px}
+.loadbar{position:fixed;left:0;right:0;top:0;height:3px;z-index:70;overflow:hidden;pointer-events:none;transition:opacity .4s}
+.loadbar::after{content:"";position:absolute;top:0;bottom:0;width:30%;background:var(--lav-ink);border-radius:2px;animation:lb 1.1s ease-in-out infinite}
+.loadbar.done{opacity:0}
+@keyframes lb{from{left:-30%}to{left:100%}}
+.legend .k{display:flex;align-items:center;gap:8px}
+.legend .bd{width:10px;height:10px;border-radius:50%;background:var(--lav-ink);box-shadow:0 0 0 2px var(--card),0 0 0 3px var(--line)}
+.legend .ho{width:12px;height:12px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 2px var(--card)}
+
+/* Branch detail card */
+.detail{right:16px;top:76px;width:392px;max-height:calc(100dvh - 76px - 190px);background:var(--card);border-radius:26px;box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transform:translateX(24px);opacity:0;pointer-events:none;transition:transform .45s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.detail.open{transform:none;opacity:1;pointer-events:auto}
+.dh{padding:16px 16px 12px 20px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--line)}
+.dh h2{margin:0;font:400 24px/1.1 var(--display);letter-spacing:-.01em}
+.dh small{display:block;color:var(--ink2);font-size:12px;margin-top:4px}
+.sq{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--ink2);flex:none}
+.sq:hover{background:var(--tile);color:var(--ink)}
+.db{padding:14px 16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:14px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.idg{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.idg .tile.full{grid-column:1/-1}
+.idg .tile b{font:500 14px/1.35 var(--body);white-space:normal}
+.idg .tile b.mono{font-family:var(--display);font-size:16px;letter-spacing:.02em}
+.copy{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;color:var(--ink2);vertical-align:-4px;margin-left:4px}
+.copy:hover{background:var(--card)}
+.sect{display:flex;flex-direction:column;gap:8px}
+.sect h3{margin:0;font:500 15px var(--display);display:flex;align-items:center;gap:8px}
+.sect h3 .spacer{flex:1}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:13px;padding:2px 2px 0}
+.kv span{color:var(--ink2)} .kv b{font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.neg{color:var(--red)}
+.locked{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;border:1px dashed var(--line);color:var(--ink3);font-size:12.5px}
+.foot{font-size:11.5px;color:var(--ink3);padding:0 2px}
+.edit input{width:100%;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 8px;font:inherit;color:var(--ink)}
+.btn{height:34px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:500;background:var(--tile);display:inline-flex;align-items:center;gap:6px}
+.btn.dark{background:var(--ink);color:var(--card)}
+
+/* TARA popover + toast */
+.tara{left:50%;bottom:82px;transform:translateX(-50%);width:min(400px,calc(100vw - 32px));background:var(--card);border-radius:24px;box-shadow:0 24px 60px -18px rgba(21,22,26,.4);padding:16px;display:flex;flex-direction:column;gap:8px;z-index:40}
+.tara[hidden]{display:none}
+.tara .q{text-align:left;padding:10px 12px;border-radius:14px;background:var(--tile);font-size:13px}
+.tara .a{padding:12px;border-radius:14px;background:var(--lime);color:var(--lime-ink);font-size:13px;line-height:20px}
+.toast{position:fixed;left:50%;top:76px;transform:translate(-50%,-10px);opacity:0;background:var(--ink);color:var(--card);padding:10px 16px;border-radius:999px;font-weight:500;font-size:13px;transition:.2s;z-index:60;pointer-events:none;max-width:calc(100vw - 32px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Map popups and attribution, restyled */
+.maplibregl-popup.hov .maplibregl-popup-content{background:var(--card);color:var(--ink);border-radius:999px;padding:6px 12px;box-shadow:var(--shadow);font:500 12.5px var(--body);white-space:nowrap}
+.maplibregl-popup.hov .maplibregl-popup-content b{font-family:var(--display);font-weight:600;margin-left:6px}
+.maplibregl-popup.hov .maplibregl-popup-tip{display:none}
+.maplibregl-ctrl-attrib{background:color-mix(in srgb,var(--card) 80%,transparent)!important;color:var(--ink2);font-size:10.5px}
+.maplibregl-ctrl-attrib a{color:var(--ink2)}
+.maplibregl-ctrl-bottom-right{right:72px}
+
+.fade{animation:fade .35s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}}
+
+@media (max-width:1100px){ .legend{display:none} }
+@media (max-width:860px){
+  .rail,.brandc{display:none}
+  .leftcol{left:10px;right:10px;width:auto;top:auto;bottom:84px;max-height:38vh}
+  .topc{left:10px;transform:none} .topr{right:10px} .rolep .rt{display:none}
+  .detail{left:10px;right:10px;width:auto;top:auto;bottom:84px;max-height:60vh}
+  .ctl{display:none} .botc{bottom:16px}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3 21h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 3 20 8H4z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><rect x="2" y="14" width="5" height="7" rx="2"/><rect x="17" y="14" width="5" height="7" rx="2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-bars" viewBox="0 0 24 24"><path d="M3 3v18h18M8 17v-5M12 17V8M16 17v-3M20 17v-7"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></symbol>
+  <symbol id="i-replay" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+</svg>
+
+<div class="loadbar" id="loadbar" role="progressbar" aria-label="Loading map details"></div>
+<div id="map" role="region" aria-label="Map of the bank's branches. Use the location menu or the lists for keyboard access."></div>
+
+<nav class="ov rail" aria-label="Main navigation">
+  <button class="rb" data-soon="Home" aria-label="Home"><svg class="ic"><use href="#i-home"/></svg></button>
+  <button class="rb" aria-current="page" aria-label="Branch network"><svg class="ic"><use href="#i-pin"/></svg></button>
+  <button class="rb" data-soon="Core Banking" aria-label="Core Banking"><svg class="ic"><use href="#i-bank"/></svg></button>
+  <button class="rb" data-soon="Compliance" aria-label="Compliance"><svg class="ic"><use href="#i-shield"/></svg></button>
+  <button class="rb" data-soon="Reports" aria-label="Reports"><svg class="ic"><use href="#i-file"/></svg></button>
+  <button class="rb" data-soon="Insights" aria-label="Insights"><svg class="ic"><use href="#i-bars"/></svg></button>
+  <hr>
+  <button class="rb" data-soon="Settings" aria-label="Settings"><svg class="ic"><use href="#i-sliders"/></svg></button>
+  <button class="rb" data-soon="Help &amp; support" aria-label="Help and support"><svg class="ic"><use href="#i-help"/></svg></button>
+  <button class="rb" id="themeBtn" aria-label="Switch to dark mode"><svg class="ic" id="themeIc"><use href="#i-moon"/></svg></button>
+</nav>
+
+<div class="ov brandc"><div class="mark">GP</div><div style="min-width:0"><b id="bankName">Gujarat Pragati State Co-op Bank</b><small>APAAR · Branch network</small></div></div>
+
+<div class="ov leftcol off" id="left" aria-live="polite"></div>
+
+<div class="ov topc picker">
+  <button class="pill" id="locBtn" aria-haspopup="menu" aria-expanded="false"><svg class="ic s"><use href="#i-pin"/></svg><span class="crumb" id="crumb">India</span><svg class="ic s dim"><use href="#i-chev"/></svg></button>
+  <div class="menu c" id="locMenu" role="menu" hidden></div>
+</div>
+
+<div class="ov topr">
+  <button class="cbtn" id="dashBtn" aria-pressed="false" aria-label="Hide dashboard (show map only)" title="Hide dashboard · press D"><svg class="ic s"><use href="#i-panel"/></svg></button>
+  <button class="cbtn" id="dimBtn" aria-label="Switch to 2D view" title="2D / 3D">2D</button>
+  <button class="cbtn" id="replayBtn" aria-label="Replay the intro from India" title="Replay intro"><svg class="ic s"><use href="#i-replay"/></svg></button>
+  <div class="picker">
+    <button class="pill rolep" id="roleBtn" aria-haspopup="menu" aria-expanded="false"><span class="av" id="roleAv">MD</span><span class="rt"><span id="roleName">MD &amp; Chairman</span><small id="roleSub">Head office · all branches</small></span><svg class="ic s dim"><use href="#i-chev"/></svg></button>
+    <div class="menu r" id="roleMenu" role="menu" hidden></div>
+  </div>
+</div>
+
+<aside class="ov detail" id="detail" aria-label="Branch details" aria-hidden="true"></aside>
+
+<div class="ov ctl">
+  <button class="cbtn" id="homeBtn" aria-label="Back to the whole state"><svg class="ic s"><use href="#i-target"/></svg></button>
+  <button class="cbtn" id="zinBtn" aria-label="Zoom in"><svg class="ic s"><use href="#i-plus"/></svg></button>
+  <button class="cbtn" id="zoutBtn" aria-label="Zoom out"><svg class="ic s"><use href="#i-minus"/></svg></button>
+</div>
+
+<div class="ov legend" id="legend" hidden></div>
+
+<div class="ov botc">
+  <button class="pill skip" id="skipBtn" hidden>Skip intro</button>
+  <button class="pill dark" id="askBtn" aria-expanded="false"><svg class="ic s"><use href="#i-spark"/></svg>Ask TARA</button>
+</div>
+<div class="ov asof" id="asOn">As on 31 May 2026</div>
+<div class="ov tara" id="tara" hidden role="dialog" aria-label="Ask TARA">
+  <div class="row"><b>Ask TARA</b><span class="dim small" id="taraRole"></span><div class="spacer"></div><button class="sq" id="taraX" aria-label="Close"><svg class="ic s"><use href="#i-x"/></svg></button></div>
+  <div id="taraBody" style="display:flex;flex-direction:column;gap:8px"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://unpkg.com/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script src="data/branches.js"></script>
+<script src="data/geo.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const root=document.documentElement;
+const D=window.APAAR_DATA, G=window.APAAR_GEO;
+let tT; const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tT);tT=setTimeout(()=>t.classList.remove('show'),2600);};
+document.addEventListener('click',e=>{const s=e.target.closest('[data-soon]'); if(s) toast(s.dataset.soon+' opens here in the full product');});
+
+/* ---------- Formatting (Indian digit grouping) ---------- */
+const IN=(v,d=0)=>Number(v).toLocaleString('en-IN',{maximumFractionDigits:d,minimumFractionDigits:d});
+const cr=(v,d)=>{ if(v==null) return '—'; if(Math.abs(v)>=1e5) return (v<0?'−':'')+'₹'+IN(Math.abs(v)/1e5,2)+' L Cr'; d=d??(Math.abs(v)>=1000?0:2); return (v<0?'−':'')+'₹'+IN(Math.abs(v),d)+' Cr'; };
+const lakh=v=>v==null?'—':(v>=100?cr(v/100):'₹'+IN(v,2)+' L');
+const pct=(v,d=1)=>v==null?'—':IN(v,d)+'%';
+const num=v=>v==null?'—':IN(v);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const asOn=new Date(D.asOn).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+$('#asOn').textContent='Data as on '+asOn;
+$('#bankName').textContent=D.bank.bank_name.replace(' Ltd.','').replace('Cooperative','Co-op');
+
+/* ---------- Roles ----------
+   Demo only: the page hides what a role may not see. In APAAR the server must
+   filter the data, so a branch user's browser never receives other branches. */
+const ROLES={
+  md:{label:'MD & Chairman',sub:'Head office · all branches',av:'MD',see:{dep:1,loan:1,lock:1},metric:'business'},
+  credit:{label:'Credit head',sub:'Head office · loans',av:'CH',see:{loan:1},metric:'loans'},
+  deposits:{label:'Deposits & Treasury head',sub:'Head office · deposits',av:'DT',see:{dep:1},metric:'deposits'},
+  branch:{label:'Branch manager',sub:'Gandhinagar branch · 00004',av:'BM',see:{dep:1,loan:1,lock:1},own:'00004',metric:'business'}
+};
+const METRIC={
+  business:{name:'Total business',val:a=>Math.max(0,a.depBal)+a.loanOut,fmt:cr},
+  loans:{name:'Loans outstanding',val:a=>a.loanOut,fmt:cr},
+  deposits:{name:'Deposit balance',val:a=>a.depBal,fmt:cr}
+};
+let role='md';
+const R=()=>ROLES[role];
+
+/* ---------- Aggregation ---------- */
+const BR=D.branches, byCode=Object.fromEntries(BR.map(b=>[b.code,b]));
+function agg(rows){
+  const a={n:0,depBal:0,depAmt:0,depAcc:0,depCust:0,fd:0,rd:0,sb:0,ca:0,depRateW:0,loanOut:0,npa:0,loanAcc:0,loanRateW:0,lockers:0,dormant:0,nominee:0,fees:0,lockRows:0};
+  rows.forEach(r=>{
+    if(r.name) a.n++;
+    const d=r.dep,l=r.loan,k=r.lock;
+    if(d){a.depBal+=d.current_balance_cr;a.depAmt+=d.deposits_cr;a.depAcc+=d.accounts;a.depCust+=d.customers;a.fd+=d.fd_count;a.rd+=d.rd_count;a.sb+=d.sb_count;a.ca+=d.ca_count;a.depRateW+=d.avg_rate_pct*d.accounts;}
+    if(l){a.loanOut+=l.outstanding_cr;a.npa+=l.npa_outstanding_cr;a.loanAcc+=l.accounts;a.loanRateW+=l.avg_rate_pct*l.accounts;}
+    if(k){a.lockers+=k.lockers;a.dormant+=k.dormant;a.nominee+=k.with_nominee;a.fees+=k.fee_collected_lakh;a.lockRows++;}
+  });
+  a.npaPct=a.loanOut?a.npa/a.loanOut*100:0;
+  a.depRate=a.depAcc?a.depRateW/a.depAcc:0; a.loanRate=a.loanAcc?a.loanRateW/a.loanAcc:0;
+  a.casa=(a.fd+a.rd+a.sb+a.ca)?(a.sb+a.ca)/(a.fd+a.rd+a.sb+a.ca)*100:0;
+  a.dormPct=a.lockers?a.dormant/a.lockers*100:0; a.nomPct=a.lockers?a.nominee/a.lockers*100:0;
+  return a;
+}
+const DISTRICTS=[...new Set(BR.map(b=>b.district))];
+const inDistrict=d=>BR.filter(b=>b.district===d);
+// State totals include the 2 unnamed codes so they match the APAAR home screen exactly
+const stateAgg=()=>agg([...BR,...D.unmapped]);
+const logNorm=vals=>{const mx=Math.max(1e-9,...vals.map(v=>Math.log1p(Math.max(0,v))));return v=>Math.log1p(Math.max(0,v))/mx;};
+const npaTag=p=>p<1?['green','Healthy']:p<3?['amber','Watch']:['red','High'];
+
+/* ---------- Palette for the map, read from the same tokens ----------
+   Colour steps are WCAG 2.2 checked: every step is at least 3:1 against the land
+   behind it (1.4.11 non-text contrast), so a district with one branch is as visible
+   as Ahmedabad. Labels sit on card-coloured pills, so their text is above 4.5:1. */
+function pal(){
+  const dark=isDark();
+  // Soft pastel, chosen with the design team: lavender districts in 3 levels, soft lime for the India view,
+  // a neutral background so Gujarat is the only coloured area, and APAAR's soft status colours for NPA.
+  // Fills are gentle on purpose (WCAG 1.4.11 relaxed by choice); every value is also written on a pill
+  // (text 4.5:1 or more), and branch dots stay strong (4.5:1 or more) so nothing depends on fill alone.
+  return dark?{
+    land:'#1C1F2A',water:'#151821',road:'#2A2F3D',label:'#A3A6AE',halo:'#1C1F2A',
+    india:'#1C1F2A',line:'#2E3242',state:'#4B5326',stateEdge:'#8C9A45',surface:'#262A38',surfaceEdge:'#5C64A6',dline:'#1C1F2A',
+    ink:'#F2F3F5',ink2:'#A3A6AE',card:'#1A1B1F',cardline:'#2A2B31',grey:'#4A4D59',dot:'#E0E2FA',dotStroke:'#1C1F2A',
+    ramp:['#3A4070','#4E5694','#6971BE'],roof:['#4E5694','#6971BE','#8E96DE'],
+    npa:['#2F6B49','#7A6024','#874A43'],npaRoof:['#3DB577','#D9A13A','#EE7A6F'],sky:'#151821',horizon:'#1C1F2A'
+  }:{
+    land:'#F2F3F6',water:'#DDE2EA',road:'#FFFFFF',label:'#5E6169',halo:'#F2F3F6',
+    india:'#F2F3F6',line:'#DADDE4',state:'#EEF6BE',stateEdge:'#9CA845',surface:'#FFFFFF',surfaceEdge:'#A9AFE6',dline:'#E6E8EE',
+    ink:'#15161A',ink2:'#6B6E76',card:'#FFFFFF',cardline:'#DCDEE5',grey:'#C4C7CF',dot:'#4A52AE',dotStroke:'#FFFFFF',
+    ramp:['#D6DAF5','#B9BFEE','#959DE2'],roof:['#B9BFEE','#959DE2','#6E77C9'],
+    npa:['#9AD3A8','#EBC26E','#E8968F'],npaRoof:['#6FBF85','#D9A13A','#D9675C'],sky:'#EEF0F4',horizon:'#F2F3F6'
+  };
+}
+const steps=p=>role==='credit'?p.npa:p.ramp;
+const stepExpr=p=>{const c=steps(p); return ['match',['get','step'],...c.flatMap((x,i)=>[i,x]),c[0]];};
+// Credit head: Healthy / Watch / High, the same bands as the NPA tags. Everyone else: Low / Medium / High.
+const stepOf=(c,npaPct)=>role==='credit'?(npaPct<1?0:npaPct<3?1:2):Math.min(2,Math.floor(c*3));
+
+/* ---------- Bank icon: your SVG, with the roof recoloured to the branch's step ---------- */
+let bankSvg=null;
+const shade=(hex,k)=>'#'+[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*k).toString(16).padStart(2,'0')).join('');
+async function bankImage(roof,walls){
+  let s=bankSvg.replace(/#F6D13A/gi,roof).replace(/#F08700/gi,shade(roof,.72)).replace(/#F3AE00/gi,shade(roof,.86));
+  if(walls) s=s.replace(/#D7DAFF/gi,walls[0]).replace(/#AEB2F4/gi,walls[1]).replace(/#888ABF/gi,walls[2]);
+  const img=new Image(); img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(s); await img.decode();
+  const cv=document.createElement('canvas'); cv.width=cv.height=200; const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,200,200);
+  return ctx.getImageData(0,0,200,200);
+}
+async function bankIcons(){
+  const p=pal(), add=(id,data)=>map.hasImage(id)?map.updateImage(id,data):map.addImage(id,data,{pixelRatio:2});
+  const cols=role==='credit'?p.npaRoof:p.roof;  // roofs a shade deeper than the fills, so the icon reads on its district
+  for(let i=0;i<3;i++) add('bank-'+i,await bankImage(cols[i]));
+  add('bank-grey',await bankImage(p.grey,['#E4E5EA','#C9CBD3','#A9ABB4']));
+}
+// Rounded "pill" behind district labels, stretched to fit the text
+function pillImage(){
+  const p=pal(), cv=document.createElement('canvas'); cv.width=cv.height=48; const c=cv.getContext('2d');
+  c.fillStyle=p.card; c.strokeStyle=p.cardline; c.lineWidth=2; c.beginPath(); c.roundRect(1,1,46,46,18); c.fill(); c.stroke();
+  const data=c.getImageData(0,0,48,48), o={pixelRatio:2,stretchX:[[20,28]],stretchY:[[20,28]],content:[14,12,34,36]};
+  map.hasImage('pill')?map.updateImage('pill',data):map.addImage('pill',data,o);
+}
+
+/* ---------- Map ---------- */
+const map=new maplibregl.Map({
+  container:'map', style:'https://tiles.openfreemap.org/styles/positron',
+  bounds:[[68.1,6.7],[97.4,35.5]], pitch:0, maxPitch:70, attributionControl:false, fadeDuration:0
+});
+// Thin progress line while basemap tiles stream in; India and the cards don't wait for it
+map.once('idle',()=>{ const l=$('#loadbar'); l.classList.add('done'); setTimeout(()=>l.remove(),500); });
+addEventListener('resize',()=>map.resize());  // backup for MapLibre's own container watcher
+map.addControl(new maplibregl.AttributionControl({compact:true,customAttribution:'Boundaries: <a href="https://github.com/datameet/maps" target="_blank" rel="noopener">DataMeet</a> · Branch data: APAAR demo'}),'bottom-right');
+
+const pad=()=>{
+  const wide=innerWidth>860, dash=!document.body.classList.contains('nodash'), detailOpen=dash&&$('#detail').classList.contains('open');
+  return {left:wide?(dash?500:110):40, right:detailOpen&&wide?430:wide?80:40, top:90, bottom:wide&&dash?110:wide?60:innerHeight*.42};
+};
+
+// Dashboard toggle: hide every panel to see the whole map, and re-centre the current view for the new space
+function toggleDash(force){
+  const hide=force??!document.body.classList.contains('nodash');
+  document.body.classList.toggle('nodash',hide);
+  const b=$('#dashBtn'); b.setAttribute('aria-pressed',String(hide)); b.setAttribute('aria-label',hide?'Show dashboard':'Hide dashboard (show map only)'); b.title=(hide?'Show':'Hide')+' dashboard · press D';
+  if(!ready||introOn) return;
+  if(scope.level==='branch'){ const br=byCode[scope.code],p=pad(); map.easeTo({center:[br.lng,br.lat],offset:[(p.left-p.right)/2,(p.top-p.bottom)/2],duration:700}); }
+  else if(scope.level==='district'){ const f=G.districts.features.find(f=>f.properties.name===scope.district); map.easeTo({...bboxCam(f.properties.bbox,{pitch:map.getPitch(),bearing:map.getBearing()}),duration:700}); }
+  else if(scope.level==='state') map.easeTo({...bboxCam(G.stateBbox,{pitch:map.getPitch(),bearing:map.getBearing()}),duration:700});
+}
+
+function branchData(){
+  const r=R(), m=METRIC[r.metric];
+  const vals=BR.map(b=>m.val(agg([b])));
+  const n=logNorm(vals.filter((_,i)=>!BR[i].isHO));  // keep the huge head office from flattening everyone else
+  const pts=BR.map((b,i)=>{
+    const a=agg([b]), hidden=r.own&&b.code!==r.own;
+    const step=stepOf(Math.min(1,n(vals[i])),a.npaPct);
+    return {type:'Feature',properties:{code:b.code,name:b.name,district:b.district,ho:b.isHO?1:0,step,dim:hidden?1:0},geometry:{type:'Point',coordinates:[b.lng,b.lat]}};
+  });
+  return {pts:{type:'FeatureCollection',features:pts}};
+}
+// Label offsets in ems for districts that sit too close together at state zoom (Gujarat demo)
+const LABEL_NUDGE={Ahmedabad:[-2.6,.9],Gandhinagar:[3.2,-1.6],Rajkot:[-.6,-1.7],Junagadh:[-1.2,1.2],Bhavnagar:[.8,1.1]};
+function districtData(){
+  const r=R(), m=METRIC[r.metric];
+  const per=Object.fromEntries(DISTRICTS.map(d=>[d,agg(inDistrict(d))]));
+  const n=logNorm(Object.values(per).map(m.val));
+  const f=G.districts.features.map(ft=>{
+    const a=per[ft.properties.name];
+    const step=a?stepOf(n(m.val(a)),a.npaPct):0;
+    return {...ft,properties:{name:ft.properties.name,count:a?a.n:0,step,show:a&&!r.own?1:0}};
+  });
+  const lab=G.labels.features.map(ft=>{const a=per[ft.properties.name], nudge=LABEL_NUDGE[ft.properties.name];
+    return {...ft,properties:{name:ft.properties.name,count:a?a.n:0,show:a&&!r.own?1:0,...(nudge?{nudge}:{})}};});
+  return {fill:{type:'FeatureCollection',features:f},lab:{type:'FeatureCollection',features:lab}};
+}
+
+const EXT_H=10000;  // metres per √branch: Ahmedabad (11) ≈ 33 km, a one-branch district 10 km (was 88 km and 8 km)
+let extH=0, is3D=true, ready=false, introOn=false, selected=null, scope={level:'india'};
+
+const CITY_RANK=4;
+function paintBase(){
+  const p=pal();
+  // Declutter: keep land, water, major roads (only when zoomed into a branch) and big city names.
+  // Hidden: OSM borders (DataMeet's official outline is drawn instead), buildings, villages, towns,
+  // highway numbers, minor roads, rail, airports, parks and land use.
+  const HIDE=/boundary|building|shield|highway-name|road_|railway|aeroway|pier|tunnel|path|minor|label_village|label_town|label_other|landuse|landcover|park|waterway|water_name_line|airport/;
+  map.getStyle().layers.forEach(l=>{
+    if(l.id.startsWith('x-')) return;
+    const id=l.id, set=(k,v)=>{try{map.setPaintProperty(id,k,v);}catch(e){}};
+    if(HIDE.test(id)){ map.setLayoutProperty(id,'visibility','none'); return; }
+    if(l.type==='background') set('background-color',p.land);
+    else if(l.type==='fill') set('fill-color',p.water);
+    else if(l.type==='line'){
+      // Major roads and motorways: faint, and only from zoom 10 so the state and district views stay clean
+      map.setLayerZoomRange(id,10,24); set('line-color',p.road); set('line-opacity',/casing/.test(id)?0:.9);
+    }else if(l.type==='symbol'){ set('text-color',p.label); set('text-halo-color',p.halo); set('text-halo-width',1.4);
+      // About half the city names: keep capitals and the larger cities (OpenMapTiles rank 1–4, lower = bigger)
+      if(id==='label_city') map.setFilter(id,['all',['==',['get','class'],'city'],['!=',['get','capital'],2],['<=',['coalesce',['get','rank'],99],CITY_RANK]]);
+      if(l.layout&&l.layout['text-field']) map.setLayoutProperty(id,'text-field',['coalesce',['get','name:en'],['get','name_en'],['get','name']]); }
+  });
+  try{ map.setSky({'sky-color':p.sky,'horizon-color':p.horizon,'fog-color':p.horizon,'sky-horizon-blend':.6,'horizon-fog-blend':.6,'fog-ground-blend':.9,'atmosphere-blend':['interpolate',['linear'],['zoom'],0,1,5,1,7,0]}); }catch(e){}
+}
+function paintOwn(){
+  const p=pal();
+  // India view: the state glows lime. State view onwards: it becomes a clean surface for the districts.
+  map.setPaintProperty('x-india','fill-color',['case',['==',['get','name'],G.state],curStage==='state'?p.surface:p.state,p.india]);
+  map.setPaintProperty('x-india-line','line-color',p.line);
+  map.setPaintProperty('x-st-line','line-color',curStage==='state'?p.surfaceEdge:p.stateEdge);  // a darker shade of the fill under it
+  map.setPaintProperty('x-dist','fill-color',stepExpr(p));
+  map.setPaintProperty('x-dist-line','line-color',p.dline);
+  map.setPaintProperty('x-dist-ext','fill-extrusion-color',stepExpr(p));
+  map.setPaintProperty('x-dlab','text-color',p.ink);
+  // One compact line, "Gandhinagar  6": the count is the branch number (hover the district for the full wording)
+  map.setLayoutProperty('x-dlab','text-field',['format',['get','name'],{},'  ',{},['to-string',['get','count']],{'text-color':p.ink2}]);
+  const dot=['case',['==',['get','dim'],1],p.grey,['==',['get','ho'],1],p.ink,p.dot];  // one strong dot colour: readable on every pastel
+  map.setPaintProperty('x-glow','circle-color',dot);
+  map.setPaintProperty('x-dot','circle-color',dot); map.setPaintProperty('x-dot','circle-stroke-color',p.dotStroke);
+  map.setPaintProperty('x-sel','circle-color',p.state); map.setPaintProperty('x-sel','circle-stroke-color',p.ink);
+  map.setPaintProperty('x-blab','text-color',p.ink); map.setPaintProperty('x-blab','text-halo-color',p.land);
+  pillImage(); if(bankSvg) bankIcons();
+}
+
+// Start on 'style.load' (the style file only, ~0.1 s), not 'load' (every tile, 5–10 s on a first visit).
+// India is drawn from our own local boundary data, so it shows at once; basemap tiles stream in underneath.
+map.once('style.load',async()=>{
+  map.addSource('x-states',{type:'geojson',data:G.states});
+  const dd=districtData(), bd=branchData();
+  map.addSource('x-dist',{type:'geojson',data:dd.fill});
+  map.addSource('x-dlab',{type:'geojson',data:dd.lab});
+  map.addSource('x-br',{type:'geojson',data:bd.pts,promoteId:'code'});
+  const T={duration:900,delay:0};
+  map.addLayer({id:'x-india',type:'fill',source:'x-states',paint:{'fill-opacity':0,'fill-opacity-transition':T}},'waterway_line_label');
+  map.addLayer({id:'x-india-line',type:'line',source:'x-states',paint:{'line-width':['interpolate',['linear'],['zoom'],2,.4,6,1],'line-opacity':0,'line-opacity-transition':T}},'waterway_line_label');
+  // State edge: a thin line in a darker shade of the state's own fill (olive on lime, lavender on white)
+  const isState=['==',['get','name'],G.state];
+  map.addLayer({id:'x-st-line',type:'line',source:'x-states',filter:isState,maxzoom:10,layout:{'line-join':'round'},paint:{'line-width':['interpolate',['linear'],['zoom'],3,1.2,7,2]}},'waterway_line_label');
+  map.addLayer({id:'x-dist',type:'fill',source:'x-dist',paint:{'fill-opacity':0,'fill-opacity-transition':T}},'waterway_line_label');
+  map.addLayer({id:'x-dist-line',type:'line',source:'x-dist',paint:{'line-width':['interpolate',['linear'],['zoom'],5,.8,9,1.6],'line-opacity':0,'line-opacity-transition':T}},'waterway_line_label');
+  map.addLayer({id:'x-dist-ext',type:'fill-extrusion',source:'x-dist',filter:['==',['get','show'],1],maxzoom:10.5,paint:{'fill-extrusion-height':0,'fill-extrusion-opacity':0,'fill-extrusion-opacity-transition':T,'fill-extrusion-vertical-gradient':false}});
+  // Soft, low-intensity light so block walls are only a little darker than their tops (paper cut-outs, not slabs)
+  map.setLight({anchor:'viewport',color:'#FFFFFF',intensity:.16,position:[1.2,90,60]});
+  map.addLayer({id:'x-glow',type:'circle',source:'x-br',paint:{'circle-radius':['interpolate',['linear'],['zoom'],4,6,8,14,13,26],'circle-blur':1,'circle-opacity':0,'circle-opacity-transition':T}});
+  map.addLayer({id:'x-dot',type:'circle',source:'x-br',paint:{'circle-radius':['interpolate',['linear'],['zoom'],4,['case',['==',['get','ho'],1],4,2.5],8,['case',['==',['get','ho'],1],7,5],13,['case',['==',['get','ho'],1],10,7]],'circle-stroke-width':['case',['boolean',['feature-state','sel'],false],4,1.5],'circle-opacity':0,'circle-stroke-opacity':0,'circle-opacity-transition':T,'circle-stroke-opacity-transition':T}});
+  map.addLayer({id:'x-dlab',type:'symbol',source:'x-dlab',filter:['==',['get','show'],1],maxzoom:8.6,layout:{'text-field':'','text-font':['Noto Sans Bold'],'text-size':11.5,
+    'icon-image':'pill','icon-text-fit':'both','icon-text-fit-padding':[3,8,3,8],// Every district with branches keeps its pill: crowded ones are nudged by hand (LABEL_NUDGE), bigger on top
+    'text-anchor':'center','text-offset':['coalesce',['get','nudge'],['literal',[0,0]]],'text-allow-overlap':true,'icon-allow-overlap':true,
+    'symbol-sort-key':['get','count']},paint:{'text-opacity':0,'icon-opacity':0,'text-opacity-transition':T,'icon-opacity-transition':T}});
+  // Selected branch: a lime ring on the ground under its bank icon
+  map.addLayer({id:'x-sel',type:'circle',source:'x-br',filter:['==',['get','code'],''],minzoom:9,paint:{'circle-radius':['interpolate',['linear'],['zoom'],10,10,15,26],'circle-opacity':.55,'circle-stroke-width':2,'circle-pitch-alignment':'map'}});
+  map.addLayer({id:'x-blab',type:'symbol',source:'x-br',minzoom:8.6,layout:{'text-field':['get','name'],'text-font':['Noto Sans Bold'],'text-size':12,'text-offset':[0,.9],'text-anchor':'top','text-optional':true},paint:{'text-halo-width':1.6}});
+  pillImage();
+  paintBase(); paintOwn();
+  ready=true; buildRoleMenu(); syncRole(); intro();
+  // Bank icons only appear from district zoom, so they load after the intro has started
+  try{ bankSvg=await (await fetch('assets/bank.svg')).text(); await bankIcons(); }catch(e){ console.warn('Bank icon not loaded',e); return; }
+  // Your bank SVG stands upright on each branch and always faces the viewer (viewport-aligned)
+  const icon={'icon-image':['case',['==',['get','dim'],1],'bank-grey',['concat','bank-',['to-string',['get','step']]]],
+    'icon-anchor':'bottom','icon-pitch-alignment':'viewport','icon-rotation-alignment':'viewport','icon-allow-overlap':true,'icon-ignore-placement':true,'symbol-sort-key':['-',0,['get','step']]};
+  const fade=v=>['interpolate',['linear'],['zoom'],9.5,0,10.5,v];
+  map.addLayer({id:'x-bank',type:'symbol',source:'x-br',minzoom:9.5,layout:{...icon,'icon-size':['interpolate',['linear'],['zoom'],9.5,.32,13,.5,16,.75]},paint:{'icon-opacity':fade(['case',['==',['get','dim'],1],.6,1])}},'x-blab');
+  map.addLayer({id:'x-bank-sel',type:'symbol',source:'x-br',minzoom:9.5,filter:['==',['get','code'],selected||''],layout:{...icon,'icon-size':['interpolate',['linear'],['zoom'],9.5,.45,13,.7,16,1.05]},paint:{'icon-opacity':fade(1)}},'x-blab');
+  if(selected) markSelected(selected);
+  BANK_LAYERS.forEach(bindBranchLayer);
+});
+
+/* ---------- Stages: what is visible at each step of the journey ---------- */
+let curStage='india';
+function stage(s){
+  const op=(id,k,v)=>map.setPaintProperty(id,k,v);
+  const st=s==='state', isState=['==',['get','name'],G.state];
+  curStage=s; paintOwn();
+  // State view: the state is a solid surface and the rest of India recedes; both fade as you reach street level
+  op('x-india','fill-opacity',st?['interpolate',['linear'],['zoom'],7,['case',isState,1,0],11,['case',isState,.2,0]]:['case',isState,1,0]);
+  op('x-india-line','line-opacity',.9);
+  // Branch districts carry their colour step (solid, so the WCAG check holds); others show only their border
+  op('x-dist','fill-opacity',st?['interpolate',['linear'],['zoom'],8,['case',['==',['get','show'],1],1,0],11,['case',['==',['get','show'],1],.15,0]]:0); op('x-dist-line','line-opacity',st?1:0);
+  op('x-dlab','text-opacity',st?1:0); op('x-dlab','icon-opacity',st?.96:0); op('x-dist-ext','fill-extrusion-opacity',st?['interpolate',['linear'],['zoom'],8,1,10,0]:0);  // blocks fade out before the bank icons take over
+  // Dots hand over to the bank icons between zoom 10 and 11
+  op('x-dot','circle-opacity',st?['interpolate',['linear'],['zoom'],10,1,11,0]:0); op('x-dot','circle-stroke-opacity',st?['interpolate',['linear'],['zoom'],10,1,11,0]:0);
+  op('x-glow','circle-opacity',st?['interpolate',['linear'],['zoom'],10,.35,11,0]:0);
+}
+function growExt(to,ms=1300){
+  const from=extH, t0=performance.now();
+  return new Promise(res=>{
+    const step=t=>{const k=reduce?1:Math.min(1,(t-t0)/ms), e=1-Math.pow(1-k,3);
+      extH=from+(to-from)*e;
+      // Height grows with the square root of the branch count, so Ahmedabad (11) is about 3x a one-branch
+      // district, not 11x. Columns also shrink as you zoom in, so a district never towers over its branches.
+      map.setPaintProperty('x-dist-ext','fill-extrusion-height',['interpolate',['linear'],['zoom'],6,['*',['sqrt',['get','count']],extH],9,['*',['sqrt',['get','count']],extH*.06]]);
+      k<1?requestAnimationFrame(step):res();};
+    requestAnimationFrame(step);
+  });
+}
+// Camera helper: resolves when the move ends (or is interrupted)
+function move(method,opts){
+  return new Promise(res=>{
+    if(reduce){ const {duration,curve,speed,easing,...o}=opts; map.jumpTo(o); return res(); }
+    const done=()=>{map.off('moveend',done);res();};
+    map.on('moveend',done); map[method](opts);
+  });
+}
+const bboxCam=(bb,extra)=>({...map.cameraForBounds([[bb[0],bb[1]],[bb[2],bb[3]]],{padding:pad(),bearing:extra.bearing}),...extra});
+
+/* ---------- The intro: India → state ---------- */
+const INDIA=[68.1,6.7,97.4,35.5];
+const pause=ms=>new Promise(r=>setTimeout(r,reduce?0:ms));
+let run=0;
+async function intro(){
+  const id=++run, alive=()=>id===run;
+  introOn=true; closeDetail(true); scope={level:'india'}; renderCrumb(); $('#left').classList.add('off'); $('#legend').hidden=true;
+  $('#skipBtn').hidden=reduce; stage('india'); extH=0; map.setPaintProperty('x-dist-ext','fill-extrusion-height',0);
+  map.jumpTo(bboxCam(INDIA,{pitch:0,bearing:0}));
+  // India is our own local outline, so it is already drawn: hold briefly, then fly. Tiles keep streaming in.
+  await pause(1600); if(!alive()) return;
+  scope={level:'state'}; renderCrumb();
+  await move('flyTo',{...bboxCam(G.stateBbox,{pitch:48,bearing:-14}),duration:3000,curve:1.2,essential:true}); if(!alive()) return;
+  finishIntro();
+}
+function finishIntro(jump){
+  if(!ready) return;
+  run++; introOn=false; $('#skipBtn').hidden=true;
+  stage('state'); if(is3D) growExt(EXT_H);
+  if(jump){ map.stop(); map.jumpTo(bboxCam(G.stateBbox,{pitch:is3D?48:0,bearing:is3D?-14:0})); }
+  $('#legend').hidden=false; $('#left').classList.remove('off');
+  if(R().own) focusBranch(R().own); else setScope({level:'state'},false);
+}
+$('#skipBtn').addEventListener('click',()=>finishIntro(true));
+$('#replayBtn').addEventListener('click',()=>{ if(ready) intro(); });
+
+/* ---------- Scope: state, a district, or a branch ---------- */
+function setScope(s,fly=true){
+  if(R().own && s.level!=='branch') return toast('Branch managers see only their own branch');
+  scope=s; renderCrumb(); renderLeft();
+  if(s.level!=='branch'){ closeDetail(true); }
+  if(!fly) return;
+  if(s.level==='state') move('flyTo',{...bboxCam(G.stateBbox,{pitch:is3D?48:0,bearing:is3D?-14:0}),duration:2200,essential:true});
+  if(s.level==='district'){ const f=G.districts.features.find(f=>f.properties.name===s.district); move('flyTo',{...bboxCam(f.properties.bbox,{pitch:is3D?55:0,bearing:is3D?-24:0}),duration:2400,essential:true}); }
+}
+function focusBranch(code){
+  const b=byCode[code]; if(!b) return;
+  if(R().own && code!==R().own) return toast('Branch managers see only their own branch');
+  markSelected(code);
+  scope={level:'branch',district:b.district,code}; renderCrumb(); renderLeft(); openDetail(b);
+  // offset (not padding: padding sticks to the map) keeps the branch in the gap between the side panels
+  const p=pad();
+  move('flyTo',{center:[b.lng,b.lat],zoom:14.6,pitch:is3D?62:0,bearing:is3D?map.getBearing()+35:0,duration:2800,curve:1.5,offset:[(p.left-p.right)/2,(p.top-p.bottom)/2],essential:true});
+}
+
+/* ---------- Map interaction ---------- */
+const hov=new maplibregl.Popup({closeButton:false,closeOnClick:false,className:'hov',offset:14});
+const canClick=()=>ready&&!introOn;
+const BANK_LAYERS=['x-bank','x-bank-sel'];
+function bindBranchLayer(id){
+  map.on('mousemove',id,e=>{ if(!canClick()) return; const p=e.features[0].properties; map.getCanvas().style.cursor='pointer';
+    hov.setLngLat(byCode[p.code]?[byCode[p.code].lng,byCode[p.code].lat]:e.lngLat).setHTML(`${esc(p.name)}<b>${p.code}</b>`).addTo(map); });
+  map.on('mouseleave',id,()=>{ map.getCanvas().style.cursor=''; hov.remove(); });
+  map.on('click',id,e=>{ if(!canClick()) return; e.preventDefault(); hov.remove(); focusBranch(e.features[0].properties.code); });
+}
+bindBranchLayer('x-dot');  // the bank icon layers are bound once their image has loaded
+// The selected branch gets a bigger bank icon and a lime ring; the normal icon layer leaves it out
+function markSelected(code){
+  if(selected&&selected!==code) map.setFeatureState({source:'x-br',id:selected},{sel:false});
+  selected=code||null; if(code) map.setFeatureState({source:'x-br',id:code},{sel:true});
+  const only=['==',['get','code'],code||''];
+  map.setFilter('x-sel',only);
+  if(map.getLayer('x-bank')){ map.setFilter('x-bank-sel',only); map.setFilter('x-bank',['!=',['get','code'],code||'']); }
+}
+// No hover label on districts: the pill already says the name and branch count
+map.on('mousemove','x-dist-ext',e=>{ if(!canClick()||map.getZoom()>8.6) return; if(map.queryRenderedFeatures(e.point,{layers:['x-dot']}).length) return; map.getCanvas().style.cursor='pointer'; });
+map.on('mouseleave','x-dist-ext',()=>{ map.getCanvas().style.cursor=''; hov.remove(); });
+map.on('click','x-dist-ext',e=>{ if(!canClick()||e.defaultPrevented) return; if(map.queryRenderedFeatures(e.point,{layers:['x-dot']}).length) return; hov.remove(); setScope({level:'district',district:e.features[0].properties.name}); });
+
+$('#zinBtn').addEventListener('click',()=>map.zoomIn());
+$('#zoutBtn').addEventListener('click',()=>map.zoomOut());
+$('#homeBtn').addEventListener('click',()=>{ if(introOn) return; R().own?focusBranch(R().own):setScope({level:'state'}); });
+$('#dimBtn').addEventListener('click',()=>{
+  is3D=!is3D; $('#dimBtn').textContent=is3D?'2D':'3D'; $('#dimBtn').setAttribute('aria-label',is3D?'Switch to 2D view':'Switch to 3D view');
+  if(introOn) return;
+  growExt(is3D?EXT_H:0,700);
+  map.easeTo({pitch:is3D?(map.getZoom()>12?62:50):0,bearing:is3D?map.getBearing():0,duration:900});
+});
+
+/* ---------- Breadcrumb + location menu ---------- */
+function renderCrumb(){
+  // Show the last two steps of World › India › State › District › Branch
+  const show={india:['India'],state:['All of '+G.state],
+    district:[G.state,scope.district],branch:[scope.district+' district',scope.code&&byCode[scope.code].name]}[scope.level];
+  $('#crumb').innerHTML=show.map((p,i)=>`<span class="${i===show.length-1?'cur':'up'}">${esc(p)}</span>`).join('<svg class="ic s sep"><use href="#i-right"/></svg>');
+}
+function buildLocMenu(){
+  if(R().own){ $('#locMenu').innerHTML=`<div class="mh">Your branch</div><button role="menuitem" data-b="${R().own}">${esc(byCode[R().own].name)}<span class="mv">${R().own}</span></button>`; return; }
+  const rows=DISTRICTS.map(d=>[d,inDistrict(d).length]).sort((a,b)=>b[1]-a[1]);
+  $('#locMenu').innerHTML=`<button role="menuitemradio" aria-checked="${scope.level==='state'}" data-d="">All of ${G.state}<span class="mv">${BR.length}</span></button><div class="mh">Districts</div>`+
+    rows.map(([d,n])=>`<button role="menuitemradio" aria-checked="${scope.district===d}" data-d="${esc(d)}">${esc(d)}<span class="mv">${n}</span></button>`).join('');
+}
+function menuToggle(btn,menu,build){
+  btn.addEventListener('click',e=>{e.stopPropagation(); const m=$(menu), o=m.hidden; $$('.menu').forEach(x=>x.hidden=true); $$('[aria-haspopup]').forEach(b=>b.setAttribute('aria-expanded','false')); if(o){build&&build(); m.hidden=false; btn.setAttribute('aria-expanded','true');}});
+}
+menuToggle($('#locBtn'),'#locMenu',buildLocMenu);
+menuToggle($('#roleBtn'),'#roleMenu',buildRoleMenu);
+document.addEventListener('click',e=>{ if(!e.target.closest('.picker')){ $$('.menu').forEach(x=>x.hidden=true); $$('[aria-haspopup]').forEach(b=>b.setAttribute('aria-expanded','false')); }});
+$('#locMenu').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||introOn) return; $('#locMenu').hidden=true;
+  if(b.dataset.b) return focusBranch(b.dataset.b);
+  setScope(b.dataset.d?{level:'district',district:b.dataset.d}:{level:'state'});
+});
+
+/* ---------- Role switcher ---------- */
+function buildRoleMenu(){
+  $('#roleMenu').innerHTML='<div class="mh">View as (demo)</div>'+Object.entries(ROLES).map(([k,r])=>`<button role="menuitemradio" aria-checked="${k===role}" data-role="${k}"><span class="av">${r.av}</span><span>${esc(r.label)}<small>${esc(r.sub)}</small></span></button>`).join('');
+}
+$('#roleMenu').addEventListener('click',e=>{
+  const b=e.target.closest('[data-role]'); if(!b) return; $('#roleMenu').hidden=true;
+  if(b.dataset.role===role) return; role=b.dataset.role; syncRole();
+  if(introOn) return;
+  if(R().own) focusBranch(R().own); else { closeDetail(true); setScope({level:'state'}); }
+  toast('Now viewing as '+R().label);
+});
+function syncRole(){
+  const r=R(); $('#roleAv').textContent=r.av; $('#roleName').textContent=r.label; $('#roleSub').textContent=r.sub; $('#taraRole').textContent=r.label;
+  if(!ready) return;
+  const dd=districtData(), bd=branchData();
+  map.getSource('x-dist').setData(dd.fill); map.getSource('x-dlab').setData(dd.lab);
+  map.getSource('x-br').setData(bd.pts);
+  paintOwn(); renderLegend(); if(!introOn) renderLeft();
+  if(selected) map.setFeatureState({source:'x-br',id:selected},{sel:true});
+}
+
+/* ---------- Legend ---------- */
+function renderLegend(){
+  const p=pal(), c=steps(p), r=R(), credit=role==='credit';
+  const what=credit?'Gross NPA':METRIC[r.metric].name;
+  // Stepped swatches, one per map colour, so each can be matched exactly
+  const sw=credit
+    ?c.map((x,i)=>`<span class="sw"><i style="background:${x}"></i>${['Below 1%','1–3%','Above 3%'][i]}</span>`).join('')
+    :c.map((x,i)=>`<span class="sw"><i style="background:${x}"></i>${['Low','Medium','High'][i]}</span>`).join('');
+  $('#legend').innerHTML=r.own
+    ?`<div class="k"><span class="bd"></span>Your branch<span class="spacer"></span><span class="bd" style="background:${p.grey}"></span>Other branches (no access)</div>`
+    :`<div class="k"><b style="color:var(--ink);font-weight:500">Colour</b>${esc(what)}<span class="spacer"></span><b style="color:var(--ink);font-weight:500">Height</b>branches</div>
+      <div class="k">${sw}<span class="spacer"></span><span class="ho"></span>Head office</div>`;
+}
+
+/* ---------- Left cards ---------- */
+const ring=(v,color)=>{const C=2*Math.PI*26;return `<svg class="ring" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" stroke="var(--bar)"/><circle class="fg" cx="32" cy="32" r="26" stroke="${color}" stroke-dasharray="${C*Math.max(0,Math.min(1,v))} ${C}"/></svg>`;};
+const seg=parts=>`<div class="segbar">${parts.map(([v,c])=>`<i style="flex-grow:${Math.max(v,0.01)};background:${c}"></i>`).join('')}</div><div class="segkey">${parts.map(([v,c,l])=>`<span style="--c:${c}">${l}</span>`).join('')}</div>`;
+const big=(v)=>{const s=cr(v,0); const m=s.match(/^(.*?) Cr$/); return `<span class="big disp">${m?m[1]:s}<span class="u">Cr</span></span>`;};
+
+// Left column follows the scope: state → state totals + districts; district → district totals + its
+// branches; branch → that branch's own deposits, loans and lockers. The right card holds identity only.
+const branchOf=()=>R().own?byCode[R().own]:scope.level==='branch'?byCode[scope.code]:null;
+function scopeRows(){
+  const b=branchOf(); if(b) return [b];
+  if(scope.level==='district') return inDistrict(scope.district);
+  return null;
+}
+function scopeLabel(){
+  const b=branchOf(); if(b) return b.name+(b.isHO?'':' branch');
+  if(scope.district) return scope.district+' district';
+  return 'All of '+G.state;
+}
+function branchCards(b){
+  const r=R(), d=b.dep, l=b.loan, k=b.lock, out=[], hidden=[];
+  const card=(dot,title,right,body)=>`<section class="card fade"><div class="ch"><span class="ddot" style="background:${dot}"></span><h2>${title}</h2><span class="spacer"></span>${right}</div>${body}</section>`;
+  if(r.see.dep) out.push(card('var(--lav-ink)','Deposits',`<span class="dim small">${esc(b.name)}</span>`,d?`
+    <div class="tiles" style="grid-template-columns:1fr 1fr"><div class="tile"><span class="tl">Balance</span><b class="disp ${d.current_balance_cr<0?'neg':''}">${cr(d.current_balance_cr)}</b></div><div class="tile"><span class="tl">Principal</span><b class="disp">${cr(d.deposits_cr)}</b></div></div>
+    ${seg([[d.fd_count,'var(--lav-ink)','FD '+num(d.fd_count)],[d.rd_count,'#7C84CF','RD '+num(d.rd_count)],[d.sb_count,'var(--green)','SB '+num(d.sb_count)],[d.ca_count,'var(--amber)','CA '+num(d.ca_count)]])}
+    <div class="kv"><span>Accounts</span><b>${num(d.accounts)}</b><span>Customers</span><b>${num(d.customers)}</b><span>Avg rate</span><b>${pct(d.avg_rate_pct,2)}</b><span>Largest product</span><b>${esc(d.top_product)}</b></div>`:'<span class="muted small">No deposit data.</span>')); else hidden.push('Deposits');
+  if(r.see.loan) out.push(card('var(--green)','Loans',l?`<span class="tag ${npaTag(l.npa_pct)[0]}">NPA ${pct(l.npa_pct,2)}</span>`:'',l?`
+    <div class="tiles" style="grid-template-columns:1fr 1fr"><div class="tile"><span class="tl">Outstanding</span><b class="disp">${cr(l.outstanding_cr)}</b></div><div class="tile ${l.npa_outstanding_cr>0?'red':''}"><span class="tl">Non-performing</span><b class="disp">${cr(l.npa_outstanding_cr)}</b></div></div>
+    <div class="kv"><span>Accounts</span><b>${num(l.accounts)}</b><span>Borrowers</span><b>${num(l.customers)}</b><span>Avg rate</span><b>${pct(l.avg_rate_pct,2)}</b><span>Avg loan size</span><b>${lakh(l.avg_ticket_lakh)}</b><span>Largest product</span><b>${esc(l.top_product)}</b></div>`:'<span class="muted small">No loans at this branch.</span>')); else hidden.push('Loans');
+  if(r.see.lock) out.push(card('var(--amber)','Lockers',`<span class="dim small">${esc(b.name)}</span>`,k?`
+    <div class="tiles"><div class="tile"><span class="tl">Allotted</span><b class="disp">${num(k.lockers)}</b></div><div class="tile ${k.dormant_pct>25?'red':''}"><span class="tl">Dormant 3y+</span><b class="disp">${pct(k.dormant_pct)}</b></div><div class="tile ${k.with_nominee_pct<50?'red':'green'}"><span class="tl">With nominee</span><b class="disp">${pct(k.with_nominee_pct)}</b></div></div>
+    <div class="kv"><span>Fees collected</span><b>${lakh(k.fee_collected_lakh)}</b><span>Avg years held</span><b>${IN(k.avg_vintage_years,1)}</b></div>`:'<span class="muted small">No lockers at this branch.</span>')); else hidden.push('Lockers');
+  if(hidden.length) out.push(`<div class="locked card fade" style="box-shadow:none"><svg class="ic s"><use href="#i-lock"/></svg>${hidden.join(' and ')} are not part of the ${esc(r.label)} role</div>`);
+  return out;
+}
+function renderLeft(){
+  const r=R(), rows=scopeRows(), a=rows?agg(rows):stateAgg(), html=[], br=branchOf();
+  const sub=`<span class="spacer"></span><span class="dim small">${esc(scopeLabel())}</span>`;
+  const back=(scope.level!=='state'&&!r.own)?`<button class="sq" id="upBtn" aria-label="Back to ${esc(scope.level==='branch'?scope.district:G.state)}" style="width:28px;height:28px"><svg class="ic s"><use href="#i-back"/></svg></button>`:'';
+
+  // Card 1: the headline number for this role
+  if(r.metric==='business'){
+    const tot=a.depBal+a.loanOut;
+    html.push(`<section class="card fade"><div class="ch">${back}<span class="ddot"></span><h2>Total business</h2>${sub}</div>
+      ${big(tot)}
+      ${seg([[Math.max(0,a.depBal),'var(--lav-ink)','Deposits'],[a.loanOut,'var(--green)','Loans']])}
+      <div class="tiles"><div class="tile"><span class="tl">Deposits</span><b class="disp ${a.depBal<0?'neg':''}">${cr(a.depBal,0)}</b><small>${num(a.depAcc)} a/c</small></div>
+      <div class="tile"><span class="tl">Loans</span><b class="disp">${cr(a.loanOut,0)}</b><small>${num(a.loanAcc)} a/c</small></div>
+      <div class="tile"><span class="tl">Lockers</span><b class="disp">${num(a.lockers)}</b><small>${lakh(a.fees)} fees</small></div></div></section>`);
+  }else if(r.metric==='loans'){
+    html.push(`<section class="card fade"><div class="ch">${back}<span class="ddot" style="background:var(--green)"></span><h2>Loans outstanding</h2>${sub}</div>
+      ${big(a.loanOut)}
+      ${seg([[a.loanOut-a.npa,'var(--ink3)','Standard'],[a.npa,'var(--red)','Non-performing']])}
+      <div class="tiles"><div class="tile"><span class="tl">Loan accounts</span><b class="disp">${num(a.loanAcc)}</b><small>${a.n} ${a.n===1?'branch':'branches'}</small></div>
+      <div class="tile ${a.npa>0?'red':''}"><span class="tl">NPA amount</span><b class="disp">${cr(a.npa)}</b><small>${pct(a.npaPct,2)} of loans</small></div>
+      <div class="tile"><span class="tl">Avg rate</span><b class="disp">${pct(a.loanRate,2)}</b><small>lending</small></div></div></section>`);
+  }else{
+    html.push(`<section class="card fade"><div class="ch">${back}<span class="ddot" style="background:var(--lav-ink)"></span><h2>Deposit balance</h2>${sub}</div>
+      ${big(a.depBal)}
+      ${seg([[a.fd,'var(--lav-ink)','Fixed'],[a.rd,'#7C84CF','Recurring'],[a.sb,'var(--green)','Savings'],[a.ca,'var(--amber)','Current']])}
+      <div class="tiles"><div class="tile"><span class="tl">Accounts</span><b class="disp">${num(a.depAcc)}</b><small>${a.n} ${a.n===1?'branch':'branches'}</small></div>
+      <div class="tile"><span class="tl">Customers</span><b class="disp">${num(rows?a.depCust:D.bank.totals.deposits.unique_customers)}</b><small>depositors</small></div>
+      <div class="tile"><span class="tl">Principal</span><b class="disp">${cr(a.depAmt,0)}</b><small>deposited</small></div></div></section>`);
+  }
+
+  // Branch view: the headline card above, then that branch's own deposits, loans and lockers
+  if(br){ html.push(...branchCards(br)); return finishLeft(html); }
+
+  // Card 2: one ratio with a status tag, like CTU's "Resolution rate · Critical"
+  if(r.metric==='deposits'){
+    const t=a.casa>=40?['green','Strong']:a.casa>=25?['amber','Moderate']:['red','Low'];
+    html.push(`<section class="card fade"><div class="ch"><span class="ddot" style="background:var(--${t[0]==='green'?'green':t[0]==='amber'?'amber':'red'})"></span><h2>CASA share</h2><span class="spacer"></span><span class="dim small">of deposit accounts</span></div>
+      <div class="ratio"><span class="big disp">${pct(a.casa)}</span><span class="tag ${t[0]}">${t[1]}</span>${ring(a.casa/100,'var(--st-'+t[0]+')')}</div>
+      <span class="muted small">Savings and current accounts, by count. Avg deposit rate ${pct(a.depRate,2)}.</span></section>`);
+  }else{
+    const t=npaTag(a.npaPct);
+    html.push(`<section class="card fade"><div class="ch"><span class="ddot" style="background:var(--${t[0]==='green'?'green':t[0]==='amber'?'amber':'red'})"></span><h2>Gross NPA</h2><span class="spacer"></span><span class="dim small">of loans outstanding</span></div>
+      <div class="ratio"><span class="big disp">${pct(a.npaPct,2)}</span><span class="tag ${t[0]}">${t[1]}</span>${ring(a.npaPct/5,'var(--st-'+t[0]+')')}</div>
+      <span class="muted small">${cr(a.npa)} non-performing. Below 1% is healthy, above 3% needs action.</span></section>`);
+  }
+
+  // Card 3: ranked districts / branches (HQ roles) or lockers (MD, branch manager)
+  if(!r.own){
+    const m=METRIC[r.metric], credit=role==='credit';
+    const list=(rows?rows.map(b=>({key:b.code,name:b.name,meta:b.code+(b.isHO?' · Head office':''),a:agg([b])})):DISTRICTS.map(d=>({key:d,name:d,meta:inDistrict(d).length+' branches',a:agg(inDistrict(d))})))
+      .map(x=>({...x,v:credit?x.a.npaPct:m.val(x.a)})).sort((p,q)=>q.v-p.v);
+    const mx=Math.max(...list.map(x=>x.v),1e-9);
+    html.push(`<section class="card fade"><div class="ch"><span class="ddot"></span><h2>${rows?'Branches':'Districts'}</h2><span class="spacer"></span><span class="dim small">by ${credit?'NPA %':m.name.toLowerCase()}</span></div>
+      <div class="rank">${list.map(x=>`<button class="rk ${scope.code===x.key?'on':''}" data-${rows?'b':'d'}="${esc(x.key)}"><span style="min-width:0"><b>${esc(x.name)}</b><br><small>${esc(x.meta)}</small></span><span class="v">${credit?`<span class="tag ${npaTag(x.v)[0]}">${pct(x.v,2)}</span>`:m.fmt(x.v,0)}</span><span class="bar"><i style="width:${Math.max(2,x.v/mx*100)}%;${credit?`background:var(--st-${npaTag(x.v)[0]})`:''}"></i></span></button>`).join('')}</div></section>`);
+  }
+  if(r.see.lock && (scope.level!=='state' || role==='md')){
+    html.push(`<section class="card fade"><div class="ch"><span class="ddot" style="background:var(--amber)"></span><h2>Lockers</h2><span class="spacer"></span><span class="dim small">${esc(scopeLabel())}</span></div>
+      ${a.lockRows?`<div class="tiles"><div class="tile"><span class="tl">Allotted</span><b class="disp">${num(a.lockers)}</b><small>${lakh(a.fees)} fees</small></div>
+      <div class="tile ${a.dormPct>25?'red':''}"><span class="tl">Dormant 3y+</span><b class="disp">${pct(a.dormPct)}</b><small>${num(a.dormant)} lockers</small></div>
+      <div class="tile ${a.nomPct<50?'red':'green'}"><span class="tl">With nominee</span><b class="disp">${pct(a.nomPct)}</b><small>${num(a.nominee)}</small></div></div>`:'<span class="muted small">No lockers here.</span>'}</section>`);
+  }
+  finishLeft(html);
+}
+function finishLeft(html){
+  $('#left').innerHTML=html.join('');
+  const up=$('#upBtn'); if(up) up.addEventListener('click',()=>scope.level==='branch'?setScope({level:'district',district:scope.district}):setScope({level:'state'}));
+  $$('#left [data-d]').forEach(b=>b.addEventListener('click',()=>!introOn&&setScope({level:'district',district:b.dataset.d})));
+  $$('#left [data-b]').forEach(b=>b.addEventListener('click',()=>!introOn&&focusBranch(b.dataset.b)));
+}
+
+/* ---------- Branch detail card ---------- */
+// Identity only: the branch's figures live in the left column
+function openDetail(b){
+  const field=(label,val,full)=>`<div class="tile ${full?'full':''}"><span class="tl">${label}</span><b>${esc(val||'Not set')}</b></div>`;
+  $('#detail').innerHTML=`
+    <div class="dh"><div style="min-width:0;flex:1"><div class="row"><h2>${esc(b.name)}</h2><span class="tag ${b.isHO?'grey':'green'}">${b.isHO?'Head office':'Branch'}</span></div>
+      <small>${esc(D.bank.bank_name)}</small></div>
+      <button class="sq" id="dClose" aria-label="Close branch details"><svg class="ic s"><use href="#i-x"/></svg></button></div>
+    <div class="db">
+      <div class="idg">
+        <div class="tile lav"><span class="tl">IFSC</span><b class="mono">${b.ifsc}<button class="copy" data-copy="${b.ifsc}" aria-label="Copy IFSC"><svg class="ic s"><use href="#i-copy"/></svg></button></b></div>
+        <div class="tile lav"><span class="tl">Branch code</span><b class="mono">${b.code}</b></div>
+        <div class="tile"><span class="tl">District</span><b>${esc(b.district)}</b></div>
+        <div class="tile"><span class="tl">Location</span><b>${b.lat.toFixed(4)}, ${b.lng.toFixed(4)}</b></div>
+        ${field('Address',b.address,true)}
+        ${field('Branch manager',null)}
+        ${field('Phone',null)}
+      </div>
+      <div class="foot">Demo data. IFSC, address and location are placeholders.</div>
+    </div>`;
+  $('#detail').classList.add('open'); $('#detail').setAttribute('aria-hidden','false');
+  $('#dClose').addEventListener('click',()=>R().own?toast('This is your branch view'):setScope({level:'district',district:b.district}));
+  const q=s=>$('#detail').querySelector(s);
+  q('[data-copy]').addEventListener('click',ev=>{ev.stopPropagation(); navigator.clipboard?.writeText(b.ifsc).then(()=>toast('IFSC copied'),()=>toast(b.ifsc));});
+}
+function closeDetail(silent){
+  if(selected&&ready){ map.setFeatureState({source:'x-br',id:selected},{sel:false}); markSelected(null); }
+  selected=null; $('#detail').classList.remove('open'); $('#detail').setAttribute('aria-hidden','true');
+}
+
+/* ---------- Ask TARA: answers come from the same data the role can see ---------- */
+function qa(){
+  const r=R(), out=[];
+  if(r.own){ const b=byCode[r.own], a=agg([b]);
+    out.push(['How is my branch doing?',`${b.name} holds ${cr(a.depBal)} in deposits and ${cr(a.loanOut)} in loans. Gross NPA is ${pct(a.npaPct,2)}.`,r.own]);
+    out.push(['How many of my lockers are dormant?',a.lockRows?`${num(a.dormant)} of ${num(a.lockers)} lockers (${pct(a.dormPct)}) haven't been opened in 3+ years.`:'This branch has no lockers.',r.own]);
+    return out; }
+  const per=DISTRICTS.map(d=>({d,a:agg(inDistrict(d))}));
+  const top=[...per].sort((p,q)=>q.a.n-p.a.n)[0];
+  out.push(['Which district has the most branches?',`${top.d}: ${top.a.n} of ${BR.length} branches.`,null,top.d]);
+  if(r.see.loan){ const w=BR.filter(b=>b.loan&&!b.isHO).sort((p,q)=>q.loan.npa_pct-p.loan.npa_pct)[0];
+    out.push(['Where is NPA highest?',`${w.name} (${w.district}) at ${pct(w.loan.npa_pct,2)}: ${cr(w.loan.npa_outstanding_cr)} of ${cr(w.loan.outstanding_cr)}.`,w.code]); }
+  if(r.see.dep){ const w=BR.filter(b=>b.dep&&!b.isHO).sort((p,q)=>q.dep.current_balance_cr-p.dep.current_balance_cr)[0];
+    out.push(['Which branch holds the most deposits?',`${w.name}, with a balance of ${cr(w.dep.current_balance_cr)}.`,w.code]); }
+  if(r.see.lock){ const w=BR.filter(b=>b.lock).sort((p,q)=>q.lock.dormant_pct-p.lock.dormant_pct)[0];
+    out.push(['Where are lockers most dormant?',`${w.name}: ${pct(w.lock.dormant_pct)} of ${num(w.lock.lockers)} lockers not opened in 3+ years.`,w.code]); }
+  return out;
+}
+const home=()=>{$('#taraBody').innerHTML=qa().map((q,i)=>`<button class="q" data-q="${i}">${esc(q[0])}</button>`).join('');};
+$('#taraBody').addEventListener('click',e=>{
+  const b=e.target.closest('[data-q]'), list=qa();
+  if(b){ const [q,a,code,dist]=list[+b.dataset.q]; $('#taraBody').innerHTML=`<div class="q">${esc(q)}</div><div class="a">${esc(a)}</div><div class="row">${code||dist?`<button class="btn dark" id="taraGo" data-code="${code||''}" data-dist="${esc(dist||'')}">Show on map</button>`:''}<button class="btn" id="taraBack">Ask something else</button></div>`; }
+  if(e.target.closest('#taraBack')) home();
+  const g=e.target.closest('#taraGo'); if(g&&!introOn){ open(false); g.dataset.code?focusBranch(g.dataset.code):setScope({level:'district',district:g.dataset.dist}); }
+});
+const open=o=>{ if(o) home(); $('#tara').hidden=!o; $('#askBtn').setAttribute('aria-expanded',String(o)); };
+$('#askBtn').addEventListener('click',()=>open($('#tara').hidden)); $('#taraX').addEventListener('click',()=>open(false));
+$('#dashBtn').addEventListener('click',()=>toggleDash());
+document.addEventListener('keydown',e=>{ if((e.key==='d'||e.key==='D')&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&!/INPUT|TEXTAREA/.test(document.activeElement.tagName)) toggleDash(); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return; open(false); $$('.menu').forEach(x=>x.hidden=true);
+  if(introOn) return finishIntro(true);
+  if(scope.level==='branch'&&!R().own) setScope({level:'district',district:scope.district}); });
+
+/* ---------- Theme: follows the viewer by default; the button overrides it ---------- */
+const mq=matchMedia('(prefers-color-scheme: dark)');
+try{const t=localStorage.getItem('apaar-map-theme'); if(t) root.dataset.theme=t;}catch(e){}
+function isDark(){ return root.dataset.theme?root.dataset.theme==='dark':mq.matches; }
+const syncTheme=()=>{ const d=isDark(); $('#themeIc').innerHTML=`<use href="#i-${d?'sun':'moon'}"/>`; $('#themeBtn').setAttribute('aria-label',d?'Switch to light mode':'Switch to dark mode');
+  if(ready){ paintBase(); paintOwn(); renderLegend(); } };
+$('#themeBtn').addEventListener('click',()=>{root.dataset.theme=isDark()?'light':'dark'; try{localStorage.setItem('apaar-map-theme',root.dataset.theme);}catch(e){} syncTheme();});
+mq.addEventListener('change',syncTheme); syncTheme();
+})();
+</script>
+</body>
+</html>
